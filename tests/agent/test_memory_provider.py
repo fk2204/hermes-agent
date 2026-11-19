@@ -1444,3 +1444,15 @@ class TestSystemPromptGateParity:
         assert added == 1
         names = {t["function"]["name"] for t in agent.tools}
         assert "mnemosyne_remember" in names
+
+
+@pytest.mark.parametrize("timeout", [float("nan"), float("inf"), float("-inf"), 0, -1, "bad"])
+def test_direct_manager_rejects_invalid_prefetch_timeout(timeout):
+    with pytest.raises(ValueError):
+        MemoryManager(external_prefetch_timeout=timeout)
+
+
+@pytest.mark.parametrize("timeout, expected", [(None, 8.0), (0.125, 0.125), (12, 12.0), ("2.5", 2.5)])
+def test_direct_manager_prefetch_timeout_compatibility(timeout, expected):
+    manager = MemoryManager(external_prefetch_timeout=timeout)
+    assert manager._external_prefetch_timeout == expected

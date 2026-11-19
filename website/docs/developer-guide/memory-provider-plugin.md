@@ -231,6 +231,7 @@ the active profile, set:
 ```yaml
 memory:
   prefetch_spill_enabled: true  # default: false
+  external_prefetch_timeout: 8.0  # default: 8.0 seconds
 ```
 
 When enabled, results above the shared `hooks.output_spill.max_chars` threshold
@@ -239,10 +240,15 @@ with the configured head/tail preview plus its path. The default preview keeps
 only the first and last `500` characters; the model must read the file to recover
 the middle. Results at or below the threshold remain unchanged.
 
+External prefetch waits up to `external_prefetch_timeout` seconds. The value
+must be a finite positive number; invalid values emit a warning and fall back to
+`8.0` seconds.
+
 The shared `hooks.output_spill` preview lengths and directory still apply, and
 `hooks.output_spill.enabled: false` disables spilling even with memory opt-in.
-Both settings are snapshotted when the external provider is registered; restart
-Hermes to apply changes to existing sessions. Built-in memory and normal
+These memory settings are captured when a new external memory manager is
+created. Reused sessions retain their current timeout until the manager is
+recreated (normally by restarting Hermes). Built-in memory and normal
 plugin-hook spilling are unaffected. See
 [Plugins — oversized-context spill](./plugins/index.md#oversized-context-spill).
 

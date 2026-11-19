@@ -10,6 +10,7 @@ Symbols that tests patch on ``run_agent.*`` (``OpenAI``, ``get_tool_definitions`
 from __future__ import annotations
 
 import logging
+import math
 import os
 import re
 import sys
@@ -1159,6 +1160,7 @@ def _init_memory(agent, _agent_cfg, skip_memory, platform, memory_manager=None):
         "memory" in (agent.enabled_toolsets or [])
         and "memory" not in (agent.disabled_toolsets or [])
     )
+    mem_config = {}
     if not skip_memory or _memory_toolset_requested:
         # Memory is optional — don't break agent init
         with suppress(Exception):
@@ -1196,7 +1198,29 @@ def _init_memory(agent, _agent_cfg, skip_memory, platform, memory_manager=None):
             _mem_provider_name = mem_config.get("provider", "") if mem_config else ""
             if not is_core_memory_provider(_mem_provider_name):
                 from agent.memory_manager import MemoryManager as _MemoryManager
-                agent._memory_manager = _MemoryManager()
+
+                _timeout_raw = (
+                    mem_config.get("external_prefetch_timeout", 8.0)
+                    if mem_config
+                    else 8.0
+                )
+                try:
+                    _external_prefetch_timeout = float(_timeout_raw)
+                    if (
+                        not math.isfinite(_external_prefetch_timeout)
+                        or _external_prefetch_timeout <= 0
+                    ):
+                        raise ValueError
+                except (TypeError, ValueError):
+                    _external_prefetch_timeout = 8.0
+                    _ra().logger.warning(
+                        "Invalid memory.external_prefetch_timeout=%r; "
+                        "using fallback 8.0 seconds",
+                        _timeout_raw,
+                    )
+                agent._memory_manager = _MemoryManager(
+                    external_prefetch_timeout=_external_prefetch_timeout
+                )
                 _mp = resolve_memory_provider(_mem_provider_name, say=agent._emit_startup_warning)
                 if _mp is not None:
                     agent._memory_manager.add_provider(_mp)

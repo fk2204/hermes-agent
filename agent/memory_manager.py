@@ -10,6 +10,7 @@ import contextvars
 import inspect
 import json
 import logging
+import math
 import re
 import threading
 import time
@@ -216,10 +217,21 @@ class MemoryManager:
         self._tool_to_provider: dict[str, MemoryProvider] = {}
         self._external_prefetch_spill_config: Optional[dict[str, Any]] = None
         self._has_external: bool = False
-        timeout = external_prefetch_timeout
-        timeout = _EXTERNAL_PREFETCH_TIMEOUT_S if timeout is None else float(timeout)
-        if timeout <= 0:
-            raise ValueError("external_prefetch_timeout must be positive")
+        timeout = (
+            _EXTERNAL_PREFETCH_TIMEOUT_S
+            if external_prefetch_timeout is None
+            else external_prefetch_timeout
+        )
+        try:
+            timeout = float(timeout)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "external_prefetch_timeout must be a finite positive number"
+            ) from exc
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError(
+                "external_prefetch_timeout must be a finite positive number"
+            )
         self._external_prefetch_timeout = timeout
         # Captured at build time, inside the profile scope the agent is built for.
         self._home_key = hermes_home_key()
