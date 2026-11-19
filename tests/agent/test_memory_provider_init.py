@@ -1,9 +1,46 @@
 """Regression tests for memory provider selection during AIAgent init."""
 
+import importlib
+import sys
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _isolate_dependency_activation(_hermetic_environment):
+    # pytest already owns its interpreter. Launch-time PM activation probes beside
+    # the checkout (independent of HERMES_HOME), which may be inside a real profile.
+    # Keep the real agent/config imports without selecting another dependency env.
+    from pm import environments
+
+    activate_dependencies = environments.activate_dependencies
+    with patch.object(environments, "activate_dependencies"):
+        yield
+    # hermes_bootstrap imports this function by value; don't leave a mock cached
+    # for later tests that exercise the actual bootstrap.
+    if bootstrap := sys.modules.get("hermes_bootstrap"):
+        bootstrap.activate_dependencies = activate_dependencies
+
+
+def test_process_bootstrap_fresh_import_in_isolated_home(monkeypatch, tmp_path):
+    """A cold import must work under the home guard, even for a checkout inside a profile."""
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    import agent
+
+    monkeypatch.setattr(agent, "process_bootstrap", None, raising=False)
+    for name in ("agent.process_bootstrap", "hermes_bootstrap"):
+        # Record absent entries too, so the cold imports cannot leak into later tests.
+        monkeypatch.setitem(sys.modules, name, None)
+        monkeypatch.delitem(sys.modules, name)
+
+    bootstrap = importlib.import_module("agent.process_bootstrap")
+
+    from hermes_constants import get_hermes_home
+
+    assert get_hermes_home() == tmp_path
+    assert callable(bootstrap.OpenAI)
 
 
 class RecordingMemoryProvider:
